@@ -4,3 +4,5 @@ A Perl script to convert smartclt -a or smartctl -x output to YAML or JSON forma
 ```
 # smartctl -a /dev/sda | perl smartctl2yaml.pl > smartctl_sda.yaml
 ```
+## Authors
+* **Antti Antinoja** - [intc](https://github.com/intc)
