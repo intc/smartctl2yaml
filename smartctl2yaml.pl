@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Created by Antti Antinoja, (C) 2017
+# Created by Antti Antinoja, (C) 2017, 2018
 # License: gpl-3.0
 #
 # tab: 2
