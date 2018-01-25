@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Created by Antti Antinoja, (C) 2017, 2018
+# Created by Antti Antinoja, (C) 2017
 # License: gpl-3.0
 #
 # tab: 2
@@ -10,10 +10,11 @@ use strict;
 use warnings;
 use YAML;
 use Switch;
-# use JSON;
+use JSON;
 #
 # Global varables:
-my $keyvaluehash={};
+my $kv={};
+my $se={};
 #
 #
 my @states=(                              # One can use regular expressions here.
@@ -59,8 +60,10 @@ my $modify_script = [
 # examples:
 # 'replace' with one key path:
 # ['replace', [hash key's (comma separated)],'search pattern','replace string','g'|'',';']
-# 'replace' with two or more keypaths: 
+#
+# 'replace' with two or more keypaths:
 # ['replace', [[hash key's (comma separated)],[hash key's (comma separated)]]'search pattern','replace string','g'|'',';']
+#
   ['replace', [$k_info, "User Capacity"],'\,','','g',';'],      # remove all commas from the value
   ['replace', [$k_info, "User Capacity"],'.\[.*\]','','',';'],  # remove "[any string]" from the value
   ['End']
@@ -77,7 +80,7 @@ sub build_href_if_exists {
       else {
         return ($hash, $key);                     # Return the second last key and the name of the 
                                                   # last key as string. I tired returning the reference to the
-                                                  # last key but it returns the value insted if referense to
+                                                  # last key but it returns the value instead of referense to
                                                   # the hash. =(
       }
     }
@@ -158,7 +161,7 @@ sub array_walker {
     # replace command: Entry checks and call for array_handler.
     if ($initial){
       if(!$array->[$search]) {
-        print "Error! $search:nd parameter can not be empty!";
+        print "Error! Search (parameter nr $search) parameter can not be empty!";
         return 1;
       }
       if($array->[$method]){
@@ -174,13 +177,14 @@ sub array_walker {
         return 0;                                   # again with each key array so we can do the actual edit.
       }
       else {
-        print "Error! $hkeys:st parameter is not of type ARRAY!\n";
+        print localtime(time);
+        print "Error! hash key (parameter nr $hkeys) parameter is not of type ARRAY!\n";
         return 1;
       }
     }
     #
     # Replacing the designated values in the $keyvaluhash:
-    my ($kv_ref, $key)=build_href_if_exists($keyvaluehash, $array);
+    my ($kv_ref, $key)=build_href_if_exists($kv, $array);   # Should there be error handling????
     if($c_array->[$method] eq 'g') {
       $kv_ref->{$key} =~ s/$c_array->[$search]/$c_array->[$replace]/g;
     }
@@ -275,7 +279,7 @@ sub add_kv {
     }
     if ($txt=~ m/^\S.*$/) {               # Line starting with some NON whitespace char -> We have key or part of it
       if ($val) {                         # In case $val is populated save the collected key / value data to our hash.
-        $section->{$key}=$val;            # Update $keyvaluehash;
+        $section->{$key}=$val;            # Update $kv;
         $key=""; $val="";                 # Resetting.
       }
       if ($txt=~ m/\(*\)/) {              # Line has () pair. Key and value present.
@@ -335,31 +339,151 @@ sub parseline {
 #
 sub smartctl_check {
   my ($hash) = @_;
-  my @firstline=split(/ /, <>);
+  my @firstline=split(/ /, <STDIN>);
   if ($firstline[0] ne "smartctl") {
-    print "ERROR! The input stream does not look like smartcl (-x/-a) output - exitting (255)\n";
+    print $se->{"c_lred"}, "ERROR! The input stream does not look like smartcl (-x/-a) output - exitting (255)\n";
     exit 255;
   }
   $hash->{"Smartctl"}->{"Version"} = $firstline[1];
 }
 #
+#
+sub show_cli_help_and_exit {
+  print $se->{"c_yellow"}, "USAGE:   ", $se->{"c_lgray"}, "smartctl2yaml.pl [options]\n";
+  print "\n";
+  print $se->{"c_white"},  "OPTIONS: ", $se->{"c_lgray"}, "--help, -h\n";
+  print "           Show this help.\n";
+  print "         --outformat, -o [yaml/json]\n";
+  print "           Select output format. (Default: json)\n";
+  exit 1;
+}
+#
+#
+sub conf_check_accept_one {
+  my ($val, $choices)=@_;
+  for my $choice (@{ $choices }) {
+    if ($val eq $choice) { return 1; }
+  }
+  return 0;
+}
+#
+#
+sub conf_handle_array {
+  my ($opt, $sitem, $val)=@_;
+  if (exists $sitem->{"accept_one"}) {
+    if ( conf_check_accept_one($val, $sitem->{"accept_one"}) ) {
+      $sitem->{"value"}=$val;                               # Value was validated. Assign.
+    }
+    else {                                                  # Unknown value. Assist & exit.
+      print $se->{"c_lred"},  "ERROR:   ", $se->{"c_lgray"}, "Unrecognized value for option: ", $se->{"c_white"}, $opt, " ", $se->{"c_lred"}, $val, "\n";
+      print $se->{"c_lgray"}, "         Value for ", $se->{"c_white"}, $opt, $se->{"c_lgray"}, " can be ";
+        print $se->{"c_lgreen"}, "one", $se->{"c_lgray"}, " of the following: ";
+        print $se->{"c_lgreen"}, join(", ", @{ $sitem->{"accept_one"} }), "\n\n";
+      show_cli_help_and_exit;
+    }
+  }
+}
+#
+#
+sub conf_handle_option {
+  my ($opt,$options,$val)=@_;
+  my $sitem = $se->{"options"}->{$opt};
+  # Some sanity checks:
+  my @matches = grep { /$opt/ } @$options;                  # Check if this option is a duplicate.
+  if ($#matches!="-1") {                                    # -1 is the value when no match is found (0 for one!).
+    print $se->{"c_lred"},  "ERROR:   ", $se->{"c_lgray"};
+      print "Option ", $se->{"c_white"}, $opt, $se->{"c_lgray"}, " has already been set! Please check the commandline.\n\n";
+    show_cli_help_and_exit;
+  }
+  if (!$val) {
+    print $se->{"c_lred"},  "ERROR:   ", $se->{"c_lgray"};
+      print "Option ", $se->{"c_white"}, $opt, $se->{"c_lgray"}, " has been set without a value.\n\n";
+    show_cli_help_and_exit;
+  }
+  switch($sitem->{type}){
+    case ("array"){
+      conf_handle_array($opt, $sitem, $val);
+    }
+    else {
+      print "Config for", $opt. " has unknown configuration type. Exitting.";
+      show_cli_help_and_exit;
+    }
+  }
+  return $opt;
+}
+#
+#
+sub command_line {
+  my $n=$#ARGV+1;
+  my $val="";
+  my @options=();
+  while ($n--) {
+    my $x=$ARGV[$n];
+    switch ($x) {
+      case ["-o", "--outformat"] {
+        push(@options, conf_handle_option("--outformat",\@options,$val));
+        $val="";
+      }
+      case ["-h", "--help"] {
+        show_cli_help_and_exit;
+      }
+      else {
+        # This is not an option. It's a value or..
+        if (!$n) {
+          print "Unknown option or a value without option!\n";
+          show_cli_help_and_exit;
+        }
+        $val=$x;
+      }
+    }
+  }
+}
+#
+#               ****  MAIN  ****
+#
 # Initialize state:
 my $state=-1;
-# Initialize keyvaluehash:
-$keyvaluehash->{$k_info}={};
-$keyvaluehash->{$k_smart}={};
-$keyvaluehash->{$k_smart}->{$k_vendor}={};
-$keyvaluehash->{$k_smart}->{$k_general}={};
+# Initialize kv:
+$kv->{$k_info}={};
+$kv->{$k_smart}={};
+$kv->{$k_smart}->{$k_vendor}={};
+$kv->{$k_smart}->{$k_general}={};
+#
+# Initialize settings:
+$se->{"module"}="smartctl2yaml";
+$se->{"options"}->{"--outformat"}->{"type"}="array";
+$se->{"options"}->{"--outformat"}->{"accept_one"}=["json", "yaml"];
+$se->{"options"}->{"--outformat"}->{"value"}="json";
+$se->{"c_nc"}=      "\e[0m";
+$se->{"c_white"}=   "\e[1;37m";
+$se->{"c_black"}=   "\e[0;1m";
+$se->{"c_blue"}=    "\e[0;34m";
+$se->{"c_lblue"}=   "\e[1;34m";
+$se->{"c_green"}=   "\e[0;32m";
+$se->{"c_lgreen"}=  "\e[1;32m";
+$se->{"c_cyan"}=    "\e[0;36m";
+$se->{"c_lcyan"}=   "\e[1;36m";
+$se->{"c_red"}=     "\e[0;31m";
+$se->{"c_lred"}=    "\e[1;31m";
+$se->{"c_purple"}=  "\e[0;35m";
+$se->{"c_lpurple"}= "\e[1;35m";
+$se->{"c_brown"}=   "\e[0;33m";
+$se->{"c_yellow"}=  "\e[1;33m";
+$se->{"c_gray"}=    "\e[1;30m";
+$se->{"c_lgray"}=   "\e[0;37m";
+#
+# Deal with command line
+command_line;
 #
 # Read the first line for getting version info:
-smartctl_check($keyvaluehash);
+smartctl_check($kv);
 #
 # Enter the MAIN LOOP for reading rest of the lines:
 for(my $line=1;(<STDIN>);$line++) {
   chop;
   my $index = get_index($_,@states);
   if ($index != -1) { $state=$index;}
-  else { $state=parseline($state, $line, $_, $keyvaluehash); }
+  else { $state=parseline($state, $line, $_, $kv); }
 }
 #
 #
@@ -367,9 +491,12 @@ if (cmd_loop($modify_script)) {
   print "Error! Modify script failed - exitting (3)\n";
   exit 3;
 }
-#
-# Dump YAML:
-print Dump $keyvaluehash;
-#
-# Dump JSON:
-#print encode_json $keyvaluehash;
+
+if ($se->{"options"}->{"--outformat"}->{"value"} eq "yaml" ){
+  # Dump YAML:
+  print Dump $kv;
+}
+else {
+  # Dump JSON:
+  print encode_json $kv;
+}
