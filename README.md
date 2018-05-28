@@ -9,7 +9,7 @@ smartctl2yaml.pl [options]
 OPTIONS: --help, -h
            Show this help.
          --outformat, -o [yaml/json]
-           Select output format. (Default: json)
+           Select output format. (Default: yaml)
 ```
 ## Example
 ```
