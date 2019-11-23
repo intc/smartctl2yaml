@@ -15,5 +15,9 @@ OPTIONS: --help, -h
 ```
 # sudo smartctl -x /dev/sda | perl smartctl2yaml.pl -o yaml
 ```
+Or with a nvme unit:
+```
+# sudo smartctl -x /dev/nvme0n1 | perl smartctl2yaml.pl -o yaml
+```
 ## Authors
 * **Antti Antinoja** - [intc](https://github.com/intc)
