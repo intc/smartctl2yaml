@@ -13,7 +13,7 @@ OPTIONS: --help, -h
 ```
 ## Example
 ```
-# sudo smartctl -x /dev/sda | perl smartctl2yaml.pl -o yaml > smartctl_sda.yaml
+# sudo smartctl -x /dev/sda | perl smartctl2yaml.pl -o yaml
 ```
 ## Authors
 * **Antti Antinoja** - [intc](https://github.com/intc)
